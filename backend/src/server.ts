@@ -39,7 +39,9 @@ app.post("/report", async (req, res) => {
     return res.status(500).json({ ok: false, error: "telegram config missing" });
   }
 
-  const text = body.result === "win" ? `Победа! Промокод выдан: ${body.code}` : "Проигрыш";
+  const text = body.result === "win" 
+    ? `рџЋ‰ РџРѕР±РµРґР°! РџСЂРѕРјРѕРєРѕРґ РІС‹РґР°РЅ: ${body.code}` 
+    : `рџ” РџСЂРѕРёРіСЂС‹С€`;
   const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
 
   try {

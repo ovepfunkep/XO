@@ -1,5 +1,5 @@
 import { Player } from '../types';
-import { checkWinner, makeMove } from './game';
+import { checkWinner } from './game';
 
 // Rule-based AI: блокировка, выигрыш, центр, углы, случайный
 export function getAIMove(board: Player[], player: Player = 'O'): number {

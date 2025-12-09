@@ -1,12 +1,11 @@
-export type CellValue = "X" | "O" | null;
-export type BoardState = CellValue[];
-export type GameStatus = "idle" | "playing" | "won" | "lost" | "draw";
+export type Player = 'X' | 'O' | null;
+export type GameStatus = 'playing' | 'win' | 'lose' | 'draw';
 
-export interface ResultPayload {
-  result: "win" | "lose";
-  code?: string;
-  clientId: string;
-  board: BoardState;
+export interface GameState {
+  board: Player[];
+  currentPlayer: Player;
+  status: GameStatus;
+  winner: Player;
+  winningLine: number[] | null;
 }
-
 

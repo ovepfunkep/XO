@@ -1,245 +1,208 @@
-import { useEffect, useMemo, useState } from "react";
-import { detectWinner, isDraw, pickAiMove } from "./game/ai";
-import { reportResult } from "./services/api";
-import { generatePromoCode, clientId as resolveClientId } from "./utils/promo";
-import type { BoardState, GameStatus } from "./types";
-import "./app.css";
+import { useState, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
+import GameBoard from './components/GameBoard';
+import PromoModal from './components/PromoModal';
+import LoseModal from './components/LoseModal';
+import Button from './components/Button';
+import { GameState } from './types';
+import { createInitialState, makeMove } from './utils/game';
+import { getAIMove } from './utils/ai';
+import { generatePromoCode } from './utils/promo';
+import { reportGameResult } from './services/api';
 
-const emptyBoard: BoardState = Array(9).fill(null);
+export default function App() {
+  const [gameState, setGameState] = useState<GameState>(createInitialState());
+  const [promoCode, setPromoCode] = useState<string | null>(null);
+  const [showLoseModal, setShowLoseModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const aiProcessingRef = useRef(false);
 
-// UI copy kept in one place to avoid encoding surprises in build artifacts.
-const copy = {
-  status: {
-    idle: "Готовы сыграть?",
-    playing: "Ваш ход — расслабьтесь и ставьте крестик",
-    won: "Победа! Вы умнее бота",
-    lost: "Бот оказался сильнее",
-    draw: "Ничья — честно и спокойно",
-  } satisfies Record<GameStatus, string>,
-  eyebrow: "Для отдыха и фокуса",
-  heroTitle: "Спокойная партия крестиков-ноликов",
-  heroLede: "Лёгкая визуальная палитра, плавные анимации и честный бот. Подарок — промокод при победе.",
-  ctaPlay: "Сыграть сейчас",
-  ctaResume: "Продолжить партию",
-  statsWins: "Побед:",
-  statsLosses: "Поражений:",
-  statsDraws: "Ничьих:",
-  statusLabel: "Статус",
-  aiThinking: "Бот думает...",
-  yourTurn: "Ваш ход",
-  playAgain: "Сыграть ещё",
-  clearBoard: "Очистить поле",
-  promoTitle: "Ваш промокод",
-  promoNote: "Сохраните код — он уже отправлен в Telegram.",
-  botWon: "Бот победил. Сделаем реванш?",
-  retry: "Попробовать снова",
-  winSent: "Промокод выдан и отправлен в Telegram.",
-  winFailed: "Не удалось отправить данные в бота. Код сохранён локально.",
-  loseSent: "Результат отправлен в Telegram. Попробуете ещё?",
-  loseFailed: "Не удалось связаться с ботом. Можно сыграть снова.",
-};
-
-type Stats = { wins: number; losses: number; draws: number };
-
-const loadStats = (): Stats => {
-  const stored = localStorage.getItem("tictactoe-stats");
-  if (!stored) return { wins: 0, losses: 0, draws: 0 };
-  try {
-    return JSON.parse(stored) as Stats;
-  } catch {
-    return { wins: 0, losses: 0, draws: 0 };
-  }
-};
-
-const saveStats = (stats: Stats) => {
-  localStorage.setItem("tictactoe-stats", JSON.stringify(stats));
-};
-
-function App() {
-  const [board, setBoard] = useState<BoardState>(emptyBoard);
-  const [status, setStatus] = useState<GameStatus>("idle");
-  const [aiThinking, setAiThinking] = useState(false);
-  const [promo, setPromo] = useState<string | null>(null);
-  const [message, setMessage] = useState("");
-  const [stats, setStats] = useState<Stats>(loadStats);
-  const clientId = useMemo(resolveClientId, []);
-
+  // AI С…РѕРґ РїРѕСЃР»Рµ С…РѕРґР° РёРіСЂРѕРєР°
   useEffect(() => {
-    saveStats(stats);
-  }, [stats]);
+    // РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ СЃРµР№С‡Р°СЃ С…РѕРґ AI Рё РёРіСЂР° РёРґРµС‚, Рё AI РµС‰Рµ РЅРµ РѕР±СЂР°Р±Р°С‚С‹РІР°РµС‚ С…РѕРґ
+    if (gameState.currentPlayer === 'O' && gameState.status === 'playing' && !aiProcessingRef.current) {
+      aiProcessingRef.current = true;
+      setIsProcessing(true);
+      const timer = setTimeout(() => {
+        setGameState(prevState => {
+          // Р”РІРѕР№РЅР°СЏ РїСЂРѕРІРµСЂРєР°: РёРіСЂР° РІСЃРµ РµС‰Рµ РёРґРµС‚ Рё С…РѕРґ AI
+          if (prevState.currentPlayer !== 'O' || prevState.status !== 'playing') {
+            aiProcessingRef.current = false;
+            setIsProcessing(false);
+            return prevState;
+          }
+          // Р”РµР»Р°РµРј С…РѕРґ AI
+          const aiMove = getAIMove(prevState.board);
+          const newState = makeMove(prevState, aiMove);
+          aiProcessingRef.current = false;
+          setIsProcessing(false);
+          return newState;
+        });
+      }, 600); // РќРµР±РѕР»СЊС€Р°СЏ Р·Р°РґРµСЂР¶РєР° РґР»СЏ UX
+      return () => {
+        clearTimeout(timer);
+        aiProcessingRef.current = false;
+        setIsProcessing(false);
+      };
+    }
+  }, [gameState.currentPlayer, gameState.status]);
 
-  const reset = () => {
-    setBoard(emptyBoard);
-    setStatus("playing");
-    setPromo(null);
-    setMessage("");
-    setAiThinking(false);
-  };
-
+  // РћР±СЂР°Р±РѕС‚РєР° СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РёРіСЂС‹
   useEffect(() => {
-    reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const finishWin = async (finalBoard: BoardState) => {
-    const code = generatePromoCode();
-    setBoard(finalBoard);
-    setStatus("won");
-    setPromo(code);
-    setStats((prev) => ({ ...prev, wins: prev.wins + 1 }));
-    try {
-      await reportResult({ result: "win", code, board: finalBoard, clientId });
-      setMessage(copy.winSent);
-    } catch (err) {
-      console.error("reportResult failed", err);
-      setMessage(copy.winFailed);
+    if (gameState.status === 'win') {
+      const code = generatePromoCode();
+      setPromoCode(code);
+      reportGameResult('win', code).catch(err => {
+        console.error('Failed to report win:', err);
+      });
+    } else if (gameState.status === 'lose') {
+      setShowLoseModal(true);
+      reportGameResult('lose').catch(err => {
+        console.error('Failed to report lose:', err);
+      });
     }
-  };
-
-  const finishLose = async (finalBoard: BoardState) => {
-    setBoard(finalBoard);
-    setStatus("lost");
-    setStats((prev) => ({ ...prev, losses: prev.losses + 1 }));
-    try {
-      await reportResult({ result: "lose", board: finalBoard, clientId });
-      setMessage(copy.loseSent);
-    } catch (err) {
-      console.error("reportResult failed", err);
-      setMessage(copy.loseFailed);
-    }
-  };
-
-  const finishDraw = (finalBoard: BoardState) => {
-    setBoard(finalBoard);
-    setStatus("draw");
-    setStats((prev) => ({ ...prev, draws: prev.draws + 1 }));
-  };
+  }, [gameState.status]);
 
   const handleCellClick = (index: number) => {
-    if (status !== "playing" || aiThinking) return;
-    if (board[index]) return;
-
-    const nextBoard: BoardState = [...board];
-    nextBoard[index] = "X";
-
-    const winner = detectWinner(nextBoard);
-    if (winner === "X") {
-      finishWin(nextBoard);
+    if (gameState.status !== 'playing' || gameState.currentPlayer !== 'X' || isProcessing) {
       return;
     }
-    if (isDraw(nextBoard)) {
-      finishDraw(nextBoard);
-      return;
-    }
-
-    setBoard(nextBoard);
-    setAiThinking(true);
-    setTimeout(() => {
-      const move = pickAiMove(nextBoard);
-      if (move === -1) {
-        setAiThinking(false);
-        return;
-      }
-      const aiBoard: BoardState = [...nextBoard];
-      aiBoard[move] = "O";
-      const aiWinner = detectWinner(aiBoard);
-      if (aiWinner === "O") {
-        finishLose(aiBoard);
-      } else if (isDraw(aiBoard)) {
-        finishDraw(aiBoard);
-      } else {
-        setBoard(aiBoard);
-      }
-      setAiThinking(false);
-    }, 320);
+    const newState = makeMove(gameState, index);
+    setGameState(newState);
   };
 
-  const renderCell = (idx: number) => (
-    <button
-      key={idx}
-      className="cell"
-      onClick={() => handleCellClick(idx)}
-      disabled={status !== "playing" || aiThinking || board[idx] !== null}
-      aria-label={`Клетка ${idx + 1}`}
-    >
-      {board[idx]}
-    </button>
-  );
+  const handleNewGame = () => {
+    setGameState(createInitialState());
+    setPromoCode(null);
+    setShowLoseModal(false);
+    setIsProcessing(false);
+    aiProcessingRef.current = false;
+  };
+
+  const handleClosePromoModal = () => {
+    setPromoCode(null);
+    handleNewGame();
+  };
+
+  const handleCloseLoseModal = () => {
+    setShowLoseModal(false);
+    handleNewGame();
+  };
 
   return (
-    <div className="page">
-      <header className="hero">
-        <div className="title-block">
-          <p className="eyebrow">{copy.eyebrow}</p>
-          <h1>{copy.heroTitle}</h1>
-          <p className="lede">{copy.heroLede}</p>
-          <div className="cta-row">
-            <button className="primary" onClick={reset}>
-              {copy.ctaPlay}
-            </button>
-            <button className="ghost" onClick={() => setStatus("playing")} disabled={status === "playing"}>
-              {copy.ctaResume}
-            </button>
-          </div>
-          <div className="stats">
-            <span>
-              {copy.statsWins} {stats.wins}
-            </span>
-            <span>
-              {copy.statsLosses} {stats.losses}
-            </span>
-            <span>
-              {copy.statsDraws} {stats.draws}
-            </span>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 relative overflow-hidden">
+      {/* Animated background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <motion.div
+          className="absolute top-20 left-10 w-64 h-64 bg-gradient-to-br from-pink-300/20 to-purple-300/20 rounded-full blur-3xl"
+          animate={{
+            x: [0, 100, 0],
+            y: [0, 50, 0],
+            scale: [1, 1.2, 1],
+          }}
+          transition={{
+            duration: 20,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        />
+        <motion.div
+          className="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-purple-300/20 to-pink-300/20 rounded-full blur-3xl"
+          animate={{
+            x: [0, -100, 0],
+            y: [0, -50, 0],
+            scale: [1, 1.3, 1],
+          }}
+          transition={{
+            duration: 25,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        />
+      </div>
 
-      <main className="content">
-        <section className="board-card">
-          <div className="board-header">
-            <div>
-              <p className="status-label">{copy.statusLabel}</p>
-              <p className={`status ${status}`}>{copy.status[status]}</p>
-            </div>
-            <div className="pill">{aiThinking ? copy.aiThinking : copy.yourTurn}</div>
-          </div>
+      {/* Main content */}
+      <motion.div
+        className="relative z-10 w-full max-w-md"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+      >
+        {/* Header */}
+        <motion.div
+          className="text-center mb-8"
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <h1 className="text-5xl md:text-6xl font-bold text-gradient mb-4">
+            РљСЂРµСЃС‚РёРєРё-РЅРѕР»РёРєРё
+          </h1>
+          <p className="text-gray-600 text-lg">
+            {gameState.status === 'playing' 
+              ? (gameState.currentPlayer === 'X' ? 'Р’Р°С€ С…РѕРґ!' : 'РҐРѕРґ РїСЂРѕС‚РёРІРЅРёРєР°...')
+              : gameState.status === 'draw'
+              ? 'РќРёС‡СЊСЏ!'
+              : ''}
+          </p>
+        </motion.div>
 
-          <div className="board-grid">{Array.from({ length: 9 }).map((_, idx) => renderCell(idx))}</div>
+        {/* Game board container */}
+        <motion.div
+          className="glass-strong rounded-3xl md:rounded-[2.5rem] p-4 md:p-6 mb-6 shadow-2xl"
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.3, type: 'spring', stiffness: 200 }}
+        >
+          <GameBoard
+            board={gameState.board}
+            winningLine={gameState.winningLine}
+            onCellClick={handleCellClick}
+            disabled={gameState.status !== 'playing' || gameState.currentPlayer !== 'X' || isProcessing}
+          />
+        </motion.div>
 
-          <div className="actions">
-            <button className="primary" onClick={reset}>
-              {copy.playAgain}
-            </button>
-            <button className="ghost" onClick={() => setBoard(emptyBoard)} disabled={status !== "playing"}>
-              {copy.clearBoard}
-            </button>
-          </div>
+        {/* New game button */}
+        {(gameState.status !== 'playing' || gameState.status === 'draw') && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="text-center"
+          >
+            <Button onClick={handleNewGame}>
+              РќРѕРІР°СЏ РёРіСЂР°
+            </Button>
+          </motion.div>
+        )}
+      </motion.div>
 
-          {promo && status === "won" && (
-            <div className="promo">
-              <p className="promo-title">{copy.promoTitle}</p>
-              <div className="promo-code">{promo}</div>
-              <p className="promo-note">{copy.promoNote}</p>
-            </div>
-          )}
+      {/* Modals */}
+      {promoCode && (
+        <PromoModal code={promoCode} onClose={handleClosePromoModal} />
+      )}
 
-          {status === "lost" && (
-            <div className="retry">
-              <p>{copy.botWon}</p>
-              <button className="primary" onClick={reset}>
-                {copy.retry}
-              </button>
-            </div>
-          )}
+      {showLoseModal && (
+        <LoseModal onPlayAgain={handleCloseLoseModal} />
+      )}
 
-          {message && <div className="message">{message}</div>}
-        </section>
-      </main>
+      {/* Loading overlay for AI move */}
+      {isProcessing && (
+        <motion.div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/10 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
+          <motion.div
+            className="glass-strong rounded-2xl p-6"
+            animate={{ scale: [1, 1.05, 1] }}
+            transition={{ duration: 1, repeat: Infinity }}
+          >
+            <div className="text-2xl">рџ¤”</div>
+          </motion.div>
+        </motion.div>
+      )}
     </div>
   );
 }
-
-export default App;
-
-

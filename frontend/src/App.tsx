@@ -7,12 +7,36 @@ import "./app.css";
 
 const emptyBoard: BoardState = Array(9).fill(null);
 
-const statusCopy: Record<GameStatus, string> = {
-  idle: "Готовы сыграть?",
-  playing: "Ваш ход — расслабьтесь и ставьте крестик",
-  won: "Победа! Вы умнее бота",
-  lost: "Бот оказался сильнее",
-  draw: "Ничья — честно и спокойно",
+// UI copy kept in one place to avoid encoding surprises in build artifacts.
+const copy = {
+  status: {
+    idle: "Готовы сыграть?",
+    playing: "Ваш ход — расслабьтесь и ставьте крестик",
+    won: "Победа! Вы умнее бота",
+    lost: "Бот оказался сильнее",
+    draw: "Ничья — честно и спокойно",
+  } satisfies Record<GameStatus, string>,
+  eyebrow: "Для отдыха и фокуса",
+  heroTitle: "Спокойная партия крестиков-ноликов",
+  heroLede: "Лёгкая визуальная палитра, плавные анимации и честный бот. Подарок — промокод при победе.",
+  ctaPlay: "Сыграть сейчас",
+  ctaResume: "Продолжить партию",
+  statsWins: "Побед:",
+  statsLosses: "Поражений:",
+  statsDraws: "Ничьих:",
+  statusLabel: "Статус",
+  aiThinking: "Бот думает...",
+  yourTurn: "Ваш ход",
+  playAgain: "Сыграть ещё",
+  clearBoard: "Очистить поле",
+  promoTitle: "Ваш промокод",
+  promoNote: "Сохраните код — он уже отправлен в Telegram.",
+  botWon: "Бот победил. Сделаем реванш?",
+  retry: "Попробовать снова",
+  winSent: "Промокод выдан и отправлен в Telegram.",
+  winFailed: "Не удалось отправить данные в бота. Код сохранён локально.",
+  loseSent: "Результат отправлен в Telegram. Попробуете ещё?",
+  loseFailed: "Не удалось связаться с ботом. Можно сыграть снова.",
 };
 
 type Stats = { wins: number; losses: number; draws: number };
@@ -65,10 +89,10 @@ function App() {
     setStats((prev) => ({ ...prev, wins: prev.wins + 1 }));
     try {
       await reportResult({ result: "win", code, board: finalBoard, clientId });
-      setMessage("Промокод выдан и отправлен в Telegram.");
+      setMessage(copy.winSent);
     } catch (err) {
       console.error("reportResult failed", err);
-      setMessage("Не удалось отправить данные в бота. Код сохранён локально.");
+      setMessage(copy.winFailed);
     }
   };
 
@@ -78,10 +102,10 @@ function App() {
     setStats((prev) => ({ ...prev, losses: prev.losses + 1 }));
     try {
       await reportResult({ result: "lose", board: finalBoard, clientId });
-      setMessage("Результат отправлен в Telegram. Попробуете ещё?");
+      setMessage(copy.loseSent);
     } catch (err) {
       console.error("reportResult failed", err);
-      setMessage("Не удалось связаться с ботом. Можно сыграть снова.");
+      setMessage(copy.loseFailed);
     }
   };
 
@@ -146,23 +170,27 @@ function App() {
     <div className="page">
       <header className="hero">
         <div className="title-block">
-          <p className="eyebrow">Для отдыха и фокуса</p>
-          <h1>Спокойная партия крестиков-ноликов</h1>
-          <p className="lede">
-            Лёгкая визуальная палитра, плавные анимации и честный бот. Подарок — промокод при победе.
-          </p>
+          <p className="eyebrow">{copy.eyebrow}</p>
+          <h1>{copy.heroTitle}</h1>
+          <p className="lede">{copy.heroLede}</p>
           <div className="cta-row">
             <button className="primary" onClick={reset}>
-              Сыграть сейчас
+              {copy.ctaPlay}
             </button>
             <button className="ghost" onClick={() => setStatus("playing")} disabled={status === "playing"}>
-              Продолжить партию
+              {copy.ctaResume}
             </button>
           </div>
           <div className="stats">
-            <span>Побед: {stats.wins}</span>
-            <span>Поражений: {stats.losses}</span>
-            <span>Ничьих: {stats.draws}</span>
+            <span>
+              {copy.statsWins} {stats.wins}
+            </span>
+            <span>
+              {copy.statsLosses} {stats.losses}
+            </span>
+            <span>
+              {copy.statsDraws} {stats.draws}
+            </span>
           </div>
         </div>
       </header>
@@ -171,36 +199,36 @@ function App() {
         <section className="board-card">
           <div className="board-header">
             <div>
-              <p className="status-label">Статус</p>
-              <p className={`status ${status}`}>{statusCopy[status]}</p>
+              <p className="status-label">{copy.statusLabel}</p>
+              <p className={`status ${status}`}>{copy.status[status]}</p>
             </div>
-            <div className="pill">{aiThinking ? "Бот думает..." : "Ваш ход"}</div>
+            <div className="pill">{aiThinking ? copy.aiThinking : copy.yourTurn}</div>
           </div>
 
           <div className="board-grid">{Array.from({ length: 9 }).map((_, idx) => renderCell(idx))}</div>
 
           <div className="actions">
             <button className="primary" onClick={reset}>
-              Сыграть ещё
+              {copy.playAgain}
             </button>
             <button className="ghost" onClick={() => setBoard(emptyBoard)} disabled={status !== "playing"}>
-              Очистить поле
+              {copy.clearBoard}
             </button>
           </div>
 
           {promo && status === "won" && (
             <div className="promo">
-              <p className="promo-title">Ваш промокод</p>
+              <p className="promo-title">{copy.promoTitle}</p>
               <div className="promo-code">{promo}</div>
-              <p className="promo-note">Сохраните код — он уже отправлен в Telegram.</p>
+              <p className="promo-note">{copy.promoNote}</p>
             </div>
           )}
 
           {status === "lost" && (
             <div className="retry">
-              <p>Бот победил. Сделаем реванш?</p>
+              <p>{copy.botWon}</p>
               <button className="primary" onClick={reset}>
-                Попробовать снова
+                {copy.retry}
               </button>
             </div>
           )}

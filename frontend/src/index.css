@@ -1,5 +1,5 @@
 :root {
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   color: #1b1b1f;
   background: linear-gradient(135deg, #f8f4ff, #fdf6f9);
   min-height: 100%;
